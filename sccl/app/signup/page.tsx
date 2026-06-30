@@ -14,17 +14,17 @@ export default function SignupPage() {
   });
   
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Tracks whether password text is visible
   
   // Track both the message text and the specific field to highlight
   const [errorStatus, setErrorStatus] = useState<{ field: string; text: string } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    //password
+  // Secret passcode configuration
   const SECRET_ADMIN_PASSCODE = "UTM-MJIIT-2026";
 
   // Strong password rule: Min 8 chars, 1 upper, 1 lower, 1 number, 1 special character
-  // Fixes the uppercase lookahead sequence group
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?=.{8,})/;
+  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?=.{8,})/;
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -45,8 +45,13 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
       email: '',
       password: ''
     }));
+    setShowPassword(false); // Reset password visibility context on tab switch
     setErrorStatus(null); 
     setSuccessMessage(null);
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -55,7 +60,7 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
     setErrorStatus(null);
     setSuccessMessage(null);
 
-    // 1. UNIVERSAL SECURITY GUARD: Password Complexity Enforcement
+    // 1. Password Complexity Enforcement
     if (!PASSWORD_REGEX.test(formData.password)) {
       setLoading(false);
       setErrorStatus({
@@ -66,7 +71,6 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
     }
 
     // 2. STUDENT EMAIL DOMAIN VALIDATION
-
     if (formData.role === 'student' && !formData.email.endsWith('@graduate.utm.my')) {
       setLoading(false);
       setErrorStatus({
@@ -106,7 +110,7 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
       return;
     }
 
-    // 6. DATABASE SUBMISSION (Only runs if all 5 checks above pass perfectly)
+    // 6. DATABASE SUBMISSION
     try {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -117,14 +121,12 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
       const result = await response.json();
 
       if (!response.ok) {
-        // Targets any backend-specific error (like email already taken in Supabase)
         setErrorStatus({
           field: result.field || 'generic',
           text: result.text || 'An unexpected error occurred during database registration.'
         });
       } else {
         setSuccessMessage(`Account setup complete! Welcome aboard, ${formData.username}.`);
-        // Optional: clear form data here
       }
     } catch (err) {
       setErrorStatus({ 
@@ -218,7 +220,7 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
                   required
                   value={formData.email}
                   onChange={handleInputChange}
-                  placeholder="username@utm.my"
+                  placeholder="username@graduate.utm.my"
                   className={`w-full px-3.5 py-2 border rounded-lg shadow-sm outline-none text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${
                     errorStatus?.field === 'email' ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-300'
                   }`}
@@ -279,20 +281,35 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
             </div>
           )}
 
-          {/* Universal Password Field */}
+          {/* Universal Password Field with Show/Hide Inline Toggle */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              name="password"
-              required
-              value={formData.password}
-              onChange={handleInputChange}
-              placeholder="••••••••"
-              className={`w-full px-3.5 py-2 border rounded-lg shadow-sm outline-none text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${
-                errorStatus?.field === 'password' ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-300'
-              }`}
-            />
+            <div className="relative flex items-center">
+              <input
+                type={showPassword ? 'text' : 'password'} // Switches input masking dynamically
+                name="password"
+                required
+                value={formData.password}
+                onChange={handleInputChange}
+                placeholder="••••••••"
+                className={`w-full pl-3.5 pr-12 py-2 border rounded-lg shadow-sm outline-none text-gray-900 focus:ring-2 transition-colors ${
+                  formData.role === 'admin' 
+                    ? 'focus:ring-amber-500/20 focus:border-amber-500' 
+                    : 'focus:ring-blue-500/20 focus:border-blue-500'
+                } ${
+                  errorStatus?.field === 'password' ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-300'
+                }`}
+              />
+              <button
+                type="button" // Prevents default form submit interception
+                onClick={togglePasswordVisibility}
+                className={`absolute right-3 text-sm font-medium focus:outline-none select-none transition-colors ${
+                  formData.role === 'admin' ? 'text-amber-600 hover:text-amber-800' : 'text-blue-600 hover:text-blue-800'
+                }`}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
 
           <button
@@ -310,7 +327,7 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*~])(?
 
         <div className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href="/" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
+          <Link href="/login" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
             Log in
           </Link>
         </div>
