@@ -11,4 +11,5 @@ A system that allows students and researchers to track the availability of unive
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxx
 7. Replace the placeholders with the actual project keys. (Can be found in the supabase project)
-8. 
+
+ 
