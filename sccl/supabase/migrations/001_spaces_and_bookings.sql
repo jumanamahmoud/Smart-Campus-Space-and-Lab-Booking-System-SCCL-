@@ -64,6 +64,20 @@ create policy "Anon can insert booking requests"
 create policy "Anon can update booking requests"
   on public.booking_requests for update to anon using (true);
 
+-- Admin space management (required for add/edit/delete via API)
+create policy "Anon can insert spaces"
+  on public.spaces for insert to anon with check (true);
+
+create policy "Anon can update spaces"
+  on public.spaces for update to anon using (true);
+
+create policy "Anon can delete spaces"
+  on public.spaces for delete to anon using (true);
+
+-- Admin review: read student profiles for pending request queue
+create policy "Anon can view profiles"
+  on public.profiles for select to anon using (true);
+
 -- Sample spaces for development
 insert into public.spaces (name, location, capacity, type, status) values
   ('Computer Lab A', 'Block A, Level 2', 30, 'Lab', 'available'),

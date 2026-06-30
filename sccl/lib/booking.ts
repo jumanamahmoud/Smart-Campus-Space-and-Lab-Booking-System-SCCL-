@@ -1,10 +1,10 @@
-import { supabase } from '@/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function checkDateAvailability(
   spaceId: string,
   requestedDate: string
 ): Promise<{ available: boolean; message?: string }> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('booking_requests')
     .select('id, status, booking_date')
     .eq('space_id', spaceId)
@@ -41,7 +41,7 @@ export async function submitBookingRequest(
     };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('booking_requests')
     .insert({
       student_id: studentId,
@@ -54,7 +54,20 @@ export async function submitBookingRequest(
     .single();
 
   if (error) {
-    return { success: false, message: 'Failed to submit booking request.' };
+    console.error('[submitBookingRequest]', error);
+    if (error.code === '42501') {
+      return {
+        success: false,
+        message: 'Permission denied. Database policies may need updating in Supabase.',
+      };
+    }
+    if (error.code === '23503') {
+      return {
+        success: false,
+        message: 'Your account profile was not found. Please log out and sign in again.',
+      };
+    }
+    return { success: false, message: `Failed to submit booking request: ${error.message}` };
   }
 
   return { success: true, booking: data, message: 'Booking request submitted successfully.' };
@@ -64,7 +77,7 @@ export async function cancelBookingRequest(
   requestId: string,
   studentId: string
 ): Promise<{ success: boolean; message?: string }> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('booking_requests')
     .update({ status: 'canceled' })
     .eq('id', requestId)
@@ -81,7 +94,7 @@ export async function cancelBookingRequest(
 }
 
 export async function getStudentBookingHistory(studentId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseServer
     .from('booking_requests')
     .select(`
       id,
@@ -100,6 +113,7 @@ export async function getStudentBookingHistory(studentId: string) {
     .order('created_at', { ascending: false });
 
   if (error) {
+    console.error('[getStudentBookingHistory]', error);
     throw new Error('Failed to fetch booking history.');
   }
 

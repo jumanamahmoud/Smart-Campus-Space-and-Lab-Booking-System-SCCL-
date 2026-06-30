@@ -1,29 +1,36 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AlertModal from '@/components/student/AlertModal';
 import BookingHistory from '@/components/student/BookingHistory';
 import BookingModal from '@/components/student/BookingModal';
 import RoomCatalog from '@/components/student/RoomCatalog';
+import SpaceDetailModal from '@/components/student/SpaceDetailModal';
+import StudentDashboardShell, {
+  type StudentNavItem,
+} from '@/components/student/StudentDashboardShell';
 import type { BookingRequest, Space, UserSession } from '@/types/booking';
-
-type DashboardTab = 'catalog' | 'history';
 
 export default function StudentDashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('catalog');
+  const [activeNav, setActiveNav] = useState<StudentNavItem>('browse');
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
+  const [detailSpace, setDetailSpace] = useState<Space | null>(null);
   const [alert, setAlert] = useState<{ title: string; message: string } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loadingSpaces, setLoadingSpaces] = useState(true);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+
+  const pendingCount = useMemo(
+    () => bookings.filter((booking) => booking.status === 'pending').length,
+    [bookings]
+  );
 
   const loadSpaces = useCallback(async () => {
     setLoadingSpaces(true);
@@ -41,10 +48,15 @@ export default function StudentDashboardPage() {
   const loadBookings = useCallback(async (studentId: string) => {
     setLoadingBookings(true);
     try {
-      const response = await fetch(`/api/bookings?studentId=${studentId}`);
+      const response = await fetch(`/api/bookings?studentId=${encodeURIComponent(studentId)}`);
       const result = await response.json();
       if (response.ok) {
         setBookings(result.bookings ?? []);
+      } else {
+        setAlert({
+          title: 'Failed to load bookings',
+          message: result.text ?? 'Could not fetch your booking history.',
+        });
       }
     } finally {
       setLoadingBookings(false);
@@ -130,7 +142,7 @@ export default function StudentDashboardPage() {
 
       setSelectedSpace(null);
       setSuccessMessage('Your booking request was submitted and is pending admin review.');
-      setActiveTab('history');
+      setActiveNav('history');
       await loadBookings(user.id);
     } catch {
       setSelectedSpace(null);
@@ -180,100 +192,91 @@ export default function StudentDashboardPage() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">Loading dashboard...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb]">
+        <p className="text-sm text-slate-500">Loading dashboard...</p>
       </div>
     );
   }
 
+  const pageTitle =
+    activeNav === 'history'
+      ? 'My Bookings'
+      : activeNav === 'book'
+        ? 'Book a Space'
+        : 'Campus Spaces';
+
+  const pageSubtitle =
+    activeNav === 'history'
+      ? 'Track pending, approved, denied, and canceled booking requests.'
+      : activeNav === 'book'
+        ? 'Choose an available room and submit your booking request.'
+        : 'Browse and book available campus rooms and laboratories.';
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <div>
-            <Link href="/student/dashboard" className="text-xl font-bold text-gray-900">
-              SCCL Portal
-            </Link>
-            <p className="text-sm text-gray-500">Student Dashboard</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-gray-600 sm:inline">
-              Welcome, <span className="font-medium text-gray-900">{user.username}</span>
-            </span>
+    <StudentDashboardShell
+      user={user}
+      activeNav={activeNav}
+      pendingCount={pendingCount}
+      onNavChange={setActiveNav}
+      onLogout={handleLogout}
+    >
+      <div className="mb-6 lg:hidden">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(['browse', 'book', 'history'] as StudentNavItem[]).map((item) => (
             <button
+              key={item}
               type="button"
-              onClick={handleLogout}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              onClick={() => setActiveNav(item)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
+                activeNav === item
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white text-slate-600 ring-1 ring-slate-200'
+              }`}
             >
-              Log out
+              {item === 'browse' ? 'Browse' : item === 'book' ? 'Book' : 'History'}
             </button>
-          </div>
+          ))}
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        {successMessage && (
-          <div className="mb-6 rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
-            {successMessage}
-          </div>
-        )}
+      <div className="mb-6">
+        <h1 className="sccl-heading">{pageTitle}</h1>
+        <p className="sccl-subheading">{pageSubtitle}</p>
+      </div>
 
-        <div className="mb-6 flex gap-2 rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setActiveTab('catalog')}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'catalog'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            Room catalog
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'history'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            My booking history
-          </button>
+      {successMessage && (
+        <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          {successMessage}
         </div>
+      )}
 
-        {activeTab === 'catalog' ? (
-          <section>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Browse campus spaces</h2>
-              <p className="text-sm text-gray-500">
-                Select a room to submit a booking request for a specific date.
-              </p>
-            </div>
-            <RoomCatalog
-              spaces={spaces}
-              loading={loadingSpaces}
-              onBook={setSelectedSpace}
-            />
-          </section>
-        ) : (
-          <section>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Booking history</h2>
-              <p className="text-sm text-gray-500">
-                Track pending, approved, denied, and canceled requests.
-              </p>
-            </div>
-            <BookingHistory
-              bookings={bookings}
-              loading={loadingBookings}
-              onCancel={handleCancel}
-              cancelingId={cancelingId}
-            />
-          </section>
-        )}
-      </main>
+      {activeNav === 'history' ? (
+        <BookingHistory
+          bookings={bookings}
+          loading={loadingBookings}
+          onCancel={handleCancel}
+          cancelingId={cancelingId}
+        />
+      ) : (
+        <RoomCatalog
+          spaces={spaces}
+          loading={loadingSpaces}
+          availableOnly={activeNav === 'book'}
+          onBook={setSelectedSpace}
+          onViewDetails={setDetailSpace}
+        />
+      )}
+
+      {detailSpace && (
+        <SpaceDetailModal
+          space={detailSpace}
+          onClose={() => setDetailSpace(null)}
+          onBook={() => {
+            setSelectedSpace(detailSpace);
+            setDetailSpace(null);
+          }}
+        />
+      )}
 
       {selectedSpace && (
         <BookingModal
@@ -291,6 +294,6 @@ export default function StudentDashboardPage() {
           onClose={() => setAlert(null)}
         />
       )}
-    </div>
+    </StudentDashboardShell>
   );
 }
