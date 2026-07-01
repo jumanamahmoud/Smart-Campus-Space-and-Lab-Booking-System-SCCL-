@@ -8,8 +8,13 @@ export interface AdminBookingRequest {
   reason: string;
   status: BookingStatus;
   created_at: string;
-  spaces?: Pick<Space, 'name' | 'location' | 'type'>;
-  profiles?: { username: string; email: string } | null;
+  spaces?: Pick<Space, 'name' | 'location' | 'type' | 'capacity' | 'status'>;
+  profiles?: {
+    username: string;
+    email: string;
+    full_name?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
 export interface SpaceFormData {
@@ -24,6 +29,7 @@ export interface AvailabilityCell {
   status: 'available' | 'pending' | 'approved' | 'maintenance';
   label?: string;
   reason?: string;
+  bookingId?: string;
 }
 
 export interface AvailabilityTableData {
@@ -31,6 +37,10 @@ export interface AvailabilityTableData {
   dates: string[];
   grid: Record<string, Record<string, AvailabilityCell>>;
   startDate: string;
+  endDate: string;
+  year: number;
+  month: number;
+  filterDate?: string | null;
 }
 
 export type AdminNavItem = 'spaces' | 'requests' | 'availability' | 'profile';

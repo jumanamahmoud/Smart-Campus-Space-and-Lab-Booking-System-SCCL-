@@ -1,4 +1,4 @@
-import { getLocalDateRange } from '@/lib/dates';
+import { getMonthDateRange, parseDateString, toLocalDateString } from '@/lib/dates';
 import { supabaseServer } from '@/lib/supabaseServer';
 import type { AvailabilityTableData, SpaceFormData } from '@/types/admin';
 import type { SpaceStatus } from '@/types/booking';
@@ -72,7 +72,7 @@ async function attachProfiles<T extends { student_id: string }>(requests: T[]) {
   const studentIds = [...new Set(requests.map((r) => r.student_id))];
   const { data: profiles, error } = await supabaseServer
     .from('profiles')
-    .select('id, username, email')
+    .select('id, username, email, full_name, phone')
     .in('id', studentIds);
 
   if (error) {
@@ -98,7 +98,7 @@ export async function getPendingBookingRequests() {
       reason,
       status,
       created_at,
-      spaces (name, location, type)
+      spaces (name, location, type, capacity, status)
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
@@ -153,13 +153,68 @@ export async function processRequestDecision(
   return data;
 }
 
-export async function generateAvailabilityTable(days = 14): Promise<AvailabilityTableData> {
+export async function getAdminBookingById(bookingId: string) {
+  const { data, error } = await supabaseServer
+    .from('booking_requests')
+    .select(`
+      id,
+      student_id,
+      space_id,
+      booking_date,
+      reason,
+      status,
+      created_at,
+      spaces (id, name, location, type, capacity, status)
+    `)
+    .eq('id', bookingId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(formatSupabaseError('Failed to load booking', error));
+  }
+  if (!data) return null;
+
+  const { data: profile } = await supabaseServer
+    .from('profiles')
+    .select('id, username, email, full_name, phone')
+    .eq('id', data.student_id)
+    .maybeSingle();
+
+  return { ...data, profiles: profile ?? null };
+}
+
+export async function generateAvailabilityTable(options?: {
+  year?: number;
+  month?: number;
+  filterDate?: string | null;
+}): Promise<AvailabilityTableData> {
+  const now = new Date();
+  const year = options?.year ?? now.getFullYear();
+  const month = options?.month ?? now.getMonth() + 1;
+  const monthDates = getMonthDateRange(year, month);
+
+  let dates = monthDates;
+  let filterDate: string | null = null;
+
+  if (options?.filterDate) {
+    const parsed = parseDateString(options.filterDate);
+    if (parsed && parsed.getFullYear() === year && parsed.getMonth() + 1 === month) {
+      filterDate = options.filterDate;
+      dates = [filterDate];
+    }
+  }
+
+  const rangeStart = monthDates[0] ?? toLocalDateString(new Date(year, month - 1, 1));
+  const rangeEnd = monthDates[monthDates.length - 1] ?? rangeStart;
+
   const [spaces, bookingsResult] = await Promise.all([
     getAllSpaces(),
     supabaseServer
       .from('booking_requests')
-      .select('space_id, booking_date, status, student_id, reason')
-      .in('status', ['pending', 'approved']),
+      .select('id, space_id, booking_date, status, student_id, reason')
+      .in('status', ['pending', 'approved'])
+      .gte('booking_date', rangeStart)
+      .lte('booking_date', rangeEnd),
   ]);
 
   if (bookingsResult.error) {
@@ -174,12 +229,11 @@ export async function generateAvailabilityTable(days = 14): Promise<Availability
 
   const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.username]));
 
-  const dates = getLocalDateRange(days);
   const grid: AvailabilityTableData['grid'] = {};
 
   for (const space of spaces) {
     grid[space.id] = {};
-    for (const date of dates) {
+    for (const date of monthDates) {
       if (space.status === 'maintenance') {
         grid[space.id][date] = { status: 'maintenance', label: 'Under maintenance' };
       } else {
@@ -193,7 +247,7 @@ export async function generateAvailabilityTable(days = 14): Promise<Availability
 
   for (const booking of pendingBookings) {
     const spaceGrid = grid[booking.space_id];
-    if (!spaceGrid || !dates.includes(booking.booking_date)) continue;
+    if (!spaceGrid || !monthDates.includes(booking.booking_date)) continue;
     if (spaceGrid[booking.booking_date].status === 'maintenance') continue;
 
     const username = profileMap[booking.student_id] ?? 'Pending';
@@ -201,12 +255,13 @@ export async function generateAvailabilityTable(days = 14): Promise<Availability
       status: 'pending',
       label: `${username} (pending)`,
       reason: booking.reason,
+      bookingId: booking.id,
     };
   }
 
   for (const booking of approvedBookings) {
     const spaceGrid = grid[booking.space_id];
-    if (!spaceGrid || !dates.includes(booking.booking_date)) continue;
+    if (!spaceGrid || !monthDates.includes(booking.booking_date)) continue;
     if (spaceGrid[booking.booking_date].status === 'maintenance') continue;
 
     const username = profileMap[booking.student_id] ?? 'Booked';
@@ -214,6 +269,7 @@ export async function generateAvailabilityTable(days = 14): Promise<Availability
       status: 'approved',
       label: `${username} (approved)`,
       reason: booking.reason,
+      bookingId: booking.id,
     };
   }
 
@@ -227,7 +283,11 @@ export async function generateAvailabilityTable(days = 14): Promise<Availability
     })),
     dates,
     grid,
-    startDate: dates[0] ?? getLocalDateRange(1)[0],
+    startDate: monthDates[0] ?? rangeStart,
+    endDate: monthDates[monthDates.length - 1] ?? rangeEnd,
+    year,
+    month,
+    filterDate,
   };
 }
 

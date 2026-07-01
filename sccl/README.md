@@ -99,7 +99,8 @@ All routes return JSON. Errors: `{ text }` or `{ field, text }`.
 | DELETE | `/api/admin/spaces/{id}` | Delete space |
 | GET | `/api/admin/bookings/pending` | Pending request queue |
 | PATCH | `/api/admin/bookings/{id}/decision` | Approve/deny (`decision`: `approved` \| `denied`) |
-| GET | `/api/admin/availability` | 14-day availability grid |
+| GET | `/api/admin/availability?year=&month=&date=` | Monthly availability grid (optional single-day `date` filter) |
+| GET | `/api/admin/bookings/{id}` | Booking detail for admin view |
 
 ---
 

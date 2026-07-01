@@ -1,18 +1,17 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { getMonthLabel, shiftMonth, toLocalDateString } from '@/lib/dates';
 import { getSpaceCategoryStyle } from '@/lib/spaceMeta';
 import type { AvailabilityCell, AvailabilityTableData } from '@/types/admin';
-
-interface AvailabilityTableProps {
-  table: AvailabilityTableData | null;
-  loading?: boolean;
-}
 
 function formatDayHeader(dateString: string) {
   const date = new Date(`${dateString}T00:00:00`);
   return {
     weekday: date.toLocaleDateString('en-US', { weekday: 'short' }),
     label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    dayNum: date.getDate(),
   };
 }
 
@@ -30,6 +29,7 @@ function getCellTooltip(cell: AvailabilityCell) {
   const statusLabel = cell.status === 'pending' ? 'Pending approval' : 'Approved booking';
   const parts = [statusLabel, cell.label];
   if (cell.reason) parts.push(cell.reason);
+  if (cell.bookingId) parts.push('Click to view booking');
   return parts.filter(Boolean).join(' — ');
 }
 
@@ -65,44 +65,6 @@ function HammerIcon({ className }: { className?: string }) {
   );
 }
 
-function AvailabilityCellPill({ cell }: { cell: AvailabilityCell }) {
-  const tooltip = getCellTooltip(cell);
-
-  if (cell.status === 'available') {
-    return (
-      <div
-        className="sccl-availability-pill sccl-pill-available"
-        title={tooltip}
-        aria-label={tooltip}
-      >
-        <CheckIcon className="h-4 w-4 text-[var(--status-available-fg)]" />
-      </div>
-    );
-  }
-
-  if (cell.status === 'maintenance') {
-    return (
-      <div
-        className="sccl-availability-pill sccl-pill-maintenance"
-        title={tooltip}
-        aria-label={tooltip}
-      >
-        <HammerIcon className="h-4 w-4 text-[var(--status-maintenance-fg)]" />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="sccl-availability-pill sccl-pill-booked"
-      title={tooltip}
-      aria-label={tooltip}
-    >
-      <LockIcon className="h-4 w-4 text-[var(--status-booked-fg)]" />
-    </div>
-  );
-}
-
 function LegendItem({
   children,
   label,
@@ -117,16 +79,129 @@ function LegendItem({
       {children}
       <span>
         <span className="block text-sm font-medium text-slate-900">{label}</span>
-        {description && (
-          <span className="block text-xs text-slate-500">{description}</span>
-        )}
+        {description && <span className="block text-xs text-slate-500">{description}</span>}
       </span>
     </span>
   );
 }
 
-export default function AvailabilityTable({ table, loading }: AvailabilityTableProps) {
-  if (loading) {
+function AvailabilityCellPill({
+  cell,
+  onBookedClick,
+}: {
+  cell: AvailabilityCell;
+  onBookedClick?: (bookingId: string) => void;
+}) {
+  const tooltip = getCellTooltip(cell);
+  const isBooked = (cell.status === 'pending' || cell.status === 'approved') && cell.bookingId;
+
+  const content =
+    cell.status === 'available' ? (
+      <CheckIcon className="h-4 w-4 text-[var(--status-available-fg)]" />
+    ) : cell.status === 'maintenance' ? (
+      <HammerIcon className="h-4 w-4 text-[var(--status-maintenance-fg)]" />
+    ) : (
+      <LockIcon className="h-4 w-4 text-[var(--status-booked-fg)]" />
+    );
+
+  const pillClass =
+    cell.status === 'available'
+      ? 'sccl-pill-available'
+      : cell.status === 'maintenance'
+        ? 'sccl-pill-maintenance'
+        : 'sccl-pill-booked';
+
+  if (isBooked && onBookedClick) {
+    return (
+      <button
+        type="button"
+        onClick={() => onBookedClick(cell.bookingId!)}
+        className={`sccl-availability-pill ${pillClass} cursor-pointer transition hover:ring-2 hover:ring-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-300`}
+        title={tooltip}
+        aria-label={tooltip}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`sccl-availability-pill ${pillClass}`} title={tooltip} aria-label={tooltip}>
+      {content}
+    </div>
+  );
+}
+
+function getInitialMonth() {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+export default function AvailabilityTable({ refreshKey = 0 }: { refreshKey?: number }) {
+  const router = useRouter();
+  const [table, setTable] = useState<AvailabilityTableData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [{ year, month }, setViewMonth] = useState(getInitialMonth);
+  const [filterDate, setFilterDate] = useState<string>('');
+
+  const monthLabel = useMemo(() => getMonthLabel(year, month), [year, month]);
+
+  const monthInputValue = `${year}-${String(month).padStart(2, '0')}`;
+
+  const loadTable = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        year: String(year),
+        month: String(month),
+      });
+      if (filterDate) params.set('date', filterDate);
+
+      const response = await fetch(`/api/admin/availability?${params.toString()}`, {
+        cache: 'no-store',
+      });
+      const result = await response.json();
+      if (response.ok) setTable(result.table ?? null);
+    } finally {
+      setLoading(false);
+    }
+  }, [year, month, filterDate]);
+
+  useEffect(() => {
+    loadTable();
+  }, [loadTable, refreshKey]);
+
+  const handleBookedClick = (bookingId: string) => {
+    router.push(`/admin/bookings/${bookingId}`);
+  };
+
+  const handleMonthInput = (value: string) => {
+    if (!value) return;
+    const [y, m] = value.split('-').map(Number);
+    if (!y || !m) return;
+    setViewMonth({ year: y, month: m });
+    setFilterDate('');
+  };
+
+  const handleDateFilter = (value: string) => {
+    setFilterDate(value);
+    if (value) {
+      const [y, m] = value.split('-').map(Number);
+      if (y && m) setViewMonth({ year: y, month: m });
+    }
+  };
+
+  const visibleSpaces = useMemo(() => {
+    if (!table) return [];
+    if (!filterDate) return table.spaces;
+
+    return table.spaces.filter((space) => {
+      const cell = table.grid[space.id]?.[filterDate];
+      return cell && (cell.status === 'pending' || cell.status === 'approved');
+    });
+  }, [table, filterDate]);
+
+  if (loading && !table) {
     return (
       <div className="sccl-card-lg">
         <div className="h-96 animate-pulse bg-slate-100" />
@@ -144,13 +219,88 @@ export default function AvailabilityTable({ table, loading }: AvailabilityTableP
 
   return (
     <div className="space-y-4">
+      <div className="sccl-card flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMonth((prev) => shiftMonth(prev.year, prev.month, -1))}
+            className="sccl-btn-secondary px-3 py-2"
+            aria-label="Previous month"
+          >
+            ←
+          </button>
+          <div className="min-w-[160px] text-center">
+            <p className="text-lg font-bold text-slate-900">{monthLabel}</p>
+            <p className="text-xs text-slate-500">Monthly calendar view</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewMonth((prev) => shiftMonth(prev.year, prev.month, 1))}
+            className="sccl-btn-secondary px-3 py-2"
+            aria-label="Next month"
+          >
+            →
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMonth(getInitialMonth());
+              setFilterDate('');
+            }}
+            className="rounded-xl px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
+          >
+            Today
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div>
+            <label htmlFor="month-picker" className="mb-1 block text-xs font-semibold text-slate-500">
+              Jump to month
+            </label>
+            <input
+              id="month-picker"
+              type="month"
+              value={monthInputValue}
+              onChange={(e) => handleMonthInput(e.target.value)}
+              className="sccl-input py-2"
+            />
+          </div>
+          <div>
+            <label htmlFor="date-filter" className="mb-1 block text-xs font-semibold text-slate-500">
+              Filter by date
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="date-filter"
+                type="date"
+                value={filterDate}
+                min={table.startDate}
+                max={table.endDate}
+                onChange={(e) => handleDateFilter(e.target.value)}
+                className="sccl-input py-2"
+              />
+              {filterDate && (
+                <button
+                  type="button"
+                  onClick={() => setFilterDate('')}
+                  className="sccl-btn-secondary shrink-0 px-3 py-2 text-xs"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="sccl-legend">
         <LegendItem label="Available to book" description="Open slot">
           <span className="sccl-availability-pill sccl-pill-available w-14">
             <CheckIcon className="h-4 w-4 text-[var(--status-available-fg)]" />
           </span>
         </LegendItem>
-        <LegendItem label="Booked" description="Pending or approved">
+        <LegendItem label="Booked" description="Click to view booking">
           <span className="sccl-availability-pill sccl-pill-booked w-14">
             <LockIcon className="h-4 w-4 text-[var(--status-booked-fg)]" />
           </span>
@@ -162,6 +312,12 @@ export default function AvailabilityTable({ table, loading }: AvailabilityTableP
         </LegendItem>
       </div>
 
+      {filterDate && visibleSpaces.length === 0 && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No bookings on {formatLongDate(filterDate)}. Clear the filter to see the full month.
+        </div>
+      )}
+
       <div className="sccl-card-lg">
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -171,23 +327,41 @@ export default function AvailabilityTable({ table, loading }: AvailabilityTableP
                   Room
                 </th>
                 {table.dates.map((date) => {
-                  const { weekday, label } = formatDayHeader(date);
+                  const { weekday, label, dayNum } = formatDayHeader(date);
+                  const isFiltered = filterDate === date;
+                  const isToday = date === toLocalDateString(new Date());
+
                   return (
                     <th
                       key={date}
-                      className="min-w-[76px] px-2 py-3 text-center text-slate-500"
+                      className={`min-w-[52px] px-1 py-3 text-center ${
+                        isFiltered ? 'bg-brand-50' : ''
+                      } ${isToday ? 'ring-1 ring-inset ring-brand-200' : ''}`}
                     >
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                         {weekday}
                       </div>
-                      <div className="mt-0.5 text-xs font-medium text-slate-400">{label}</div>
+                      <div
+                        className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                          isToday
+                            ? 'bg-brand-600 text-white'
+                            : isFiltered
+                              ? 'bg-brand-100 text-brand-700'
+                              : 'text-slate-600'
+                        }`}
+                      >
+                        {dayNum}
+                      </div>
+                      {!filterDate && (
+                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">{label}</div>
+                      )}
                     </th>
                   );
                 })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {table.spaces.map((space) => {
+              {(filterDate ? visibleSpaces : table.spaces).map((space) => {
                 const { icon, iconBg } = getSpaceCategoryStyle(space.type);
 
                 return (
@@ -210,10 +384,16 @@ export default function AvailabilityTable({ table, loading }: AvailabilityTableP
                         status: 'available' as const,
                         label: 'Available',
                       };
+                      const isFiltered = filterDate === date;
 
                       return (
-                        <td key={date} className="px-2 py-3">
-                          <AvailabilityCellPill cell={cell} />
+                        <td
+                          key={date}
+                          className={`px-1 py-2 text-center ${isFiltered ? 'bg-brand-50/50' : ''}`}
+                        >
+                          <div className="flex justify-center">
+                            <AvailabilityCellPill cell={cell} onBookedClick={handleBookedClick} />
+                          </div>
                         </td>
                       );
                     })}
@@ -226,8 +406,18 @@ export default function AvailabilityTable({ table, loading }: AvailabilityTableP
 
         <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-3">
           <p className="text-xs leading-relaxed text-slate-500">
-            Hover cells to see booking details. Showing 14 days from{' '}
-            <span className="font-medium text-slate-700">{formatLongDate(table.startDate)}</span>.
+            {filterDate ? (
+              <>
+                Showing bookings for{' '}
+                <span className="font-medium text-slate-700">{formatLongDate(filterDate)}</span>.
+                Click a booked cell to open the booking page.
+              </>
+            ) : (
+              <>
+                Full month view: {formatLongDate(table.startDate)} –{' '}
+                {formatLongDate(table.endDate)}. Click booked cells to view booking details.
+              </>
+            )}
           </p>
         </div>
       </div>

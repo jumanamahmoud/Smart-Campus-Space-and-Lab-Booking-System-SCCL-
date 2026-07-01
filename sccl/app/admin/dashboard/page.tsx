@@ -9,7 +9,7 @@ import PendingRequestsTable from '@/components/admin/PendingRequestsTable';
 import SpaceFormModal from '@/components/admin/SpaceFormModal';
 import SpaceManager from '@/components/admin/SpaceManager';
 import AlertModal from '@/components/student/AlertModal';
-import type { AdminBookingRequest, AdminNavItem, AvailabilityTableData, SpaceFormData } from '@/types/admin';
+import type { AdminBookingRequest, AdminNavItem, SpaceFormData } from '@/types/admin';
 import type { Space, UserSession } from '@/types/booking';
 import type { UserProfile } from '@/types/profile';
 
@@ -19,14 +19,13 @@ export default function AdminDashboardPage() {
   const [activeNav, setActiveNav] = useState<AdminNavItem>('spaces');
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [pendingRequests, setPendingRequests] = useState<AdminBookingRequest[]>([]);
-  const [availabilityTable, setAvailabilityTable] = useState<AvailabilityTableData | null>(null);
+  const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
   const [editingSpace, setEditingSpace] = useState<Space | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [alert, setAlert] = useState<{ title: string; message: string } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loadingSpaces, setLoadingSpaces] = useState(true);
   const [loadingRequests, setLoadingRequests] = useState(true);
-  const [loadingAvailability, setLoadingAvailability] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -62,15 +61,14 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  const loadAvailability = useCallback(async () => {
-    setLoadingAvailability(true);
-    try {
-      const response = await fetch('/api/admin/availability');
-      const result = await response.json();
-      if (response.ok) setAvailabilityTable(result.table ?? null);
-    } finally {
-      setLoadingAvailability(false);
-    }
+  const bumpAvailabilityRefresh = () => setAvailabilityRefresh((n) => n + 1);
+
+  const isAdminNav = (value: string | null): value is AdminNavItem =>
+    value === 'spaces' || value === 'requests' || value === 'availability' || value === 'profile';
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (isAdminNav(tab)) setActiveNav(tab);
   }, []);
 
   useEffect(() => {
@@ -89,18 +87,16 @@ export default function AdminDashboardPage() {
       setUser(session);
       loadSpaces();
       loadPendingRequests();
-      loadAvailability();
     } catch {
       router.replace('/login');
     }
-  }, [router, loadSpaces, loadPendingRequests, loadAvailability]);
+  }, [router, loadSpaces, loadPendingRequests]);
 
   useEffect(() => {
     if (!user) return;
     if (activeNav === 'requests') loadPendingRequests();
-    if (activeNav === 'availability') loadAvailability();
     if (activeNav === 'spaces') loadSpaces();
-  }, [activeNav, user, loadPendingRequests, loadAvailability, loadSpaces]);
+  }, [activeNav, user, loadPendingRequests, loadSpaces]);
 
   const handleNavChange = (nav: AdminNavItem) => {
     setActiveNav(nav);
@@ -139,7 +135,8 @@ export default function AdminDashboardPage() {
       }
       setShowAddModal(false);
       setSuccessMessage('Space added successfully.');
-      await Promise.all([loadSpaces(), loadAvailability()]);
+      await loadSpaces();
+      bumpAvailabilityRefresh();
     } catch {
       setAlert({ title: 'Network error', message: 'Failed to add space.' });
     } finally {
@@ -164,7 +161,8 @@ export default function AdminDashboardPage() {
       }
       setEditingSpace(null);
       setSuccessMessage('Space updated successfully.');
-      await Promise.all([loadSpaces(), loadAvailability()]);
+      await loadSpaces();
+      bumpAvailabilityRefresh();
     } catch {
       setAlert({ title: 'Network error', message: 'Failed to update space.' });
     } finally {
@@ -184,7 +182,8 @@ export default function AdminDashboardPage() {
         return;
       }
       setSuccessMessage('Space deleted successfully.');
-      await Promise.all([loadSpaces(), loadAvailability()]);
+      await loadSpaces();
+      bumpAvailabilityRefresh();
     } catch {
       setAlert({ title: 'Network error', message: 'Failed to delete space.' });
     } finally {
@@ -210,7 +209,8 @@ export default function AdminDashboardPage() {
         return;
       }
       setSuccessMessage(`Booking request ${decision}.`);
-      await Promise.all([loadPendingRequests(), loadAvailability()]);
+      await loadPendingRequests();
+      bumpAvailabilityRefresh();
     } catch {
       setAlert({ title: 'Network error', message: 'Failed to process request.' });
     } finally {
@@ -228,7 +228,7 @@ export default function AdminDashboardPage() {
       case 'availability':
         return {
           title: 'Space Availability',
-          subtitle: 'Interactive 14-day availability grid across all campus spaces.',
+          subtitle: 'Monthly calendar with date filter — click booked cells to view details.',
         };
       case 'profile':
         return {
@@ -328,7 +328,7 @@ export default function AdminDashboardPage() {
       )}
 
       {activeNav === 'availability' && (
-        <AvailabilityTable table={availabilityTable} loading={loadingAvailability} />
+        <AvailabilityTable refreshKey={availabilityRefresh} />
       )}
 
       {activeNav === 'profile' && (
