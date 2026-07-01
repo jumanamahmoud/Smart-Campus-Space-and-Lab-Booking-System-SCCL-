@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { UserSession } from '@/types/booking';
 import { getUserInitials } from '@/lib/spaceMeta';
 
-export type StudentNavItem = 'browse' | 'book' | 'history';
+export type StudentNavItem = 'browse' | 'book' | 'history' | 'profile';
 
 interface StudentDashboardShellProps {
   user: UserSession;
@@ -20,6 +20,7 @@ const navItems: { id: StudentNavItem; label: string; icon: string }[] = [
   { id: 'browse', label: 'Browse Rooms', icon: '🏠' },
   { id: 'book', label: 'Book a Space', icon: '📅' },
   { id: 'history', label: 'My Bookings', icon: '📋' },
+  { id: 'profile', label: 'My Profile', icon: '👤' },
 ];
 
 export default function StudentDashboardShell({

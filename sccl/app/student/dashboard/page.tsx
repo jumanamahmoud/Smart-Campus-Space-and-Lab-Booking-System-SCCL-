@@ -7,10 +7,12 @@ import BookingHistory from '@/components/student/BookingHistory';
 import BookingModal from '@/components/student/BookingModal';
 import RoomCatalog from '@/components/student/RoomCatalog';
 import SpaceDetailModal from '@/components/student/SpaceDetailModal';
+import ProfileForm from '@/components/profile/ProfileForm';
 import StudentDashboardShell, {
   type StudentNavItem,
 } from '@/components/student/StudentDashboardShell';
 import type { BookingRequest, Space, UserSession } from '@/types/booking';
+import type { UserProfile } from '@/types/profile';
 
 export default function StudentDashboardPage() {
   const router = useRouter();
@@ -87,6 +89,18 @@ export default function StudentDashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem('user_session');
     router.push('/login');
+  };
+
+  const handleProfileSaved = (profile: UserProfile) => {
+    if (!user) return;
+
+    const updatedSession: UserSession = {
+      ...user,
+      username: profile.username,
+      email: profile.email,
+    };
+    setUser(updatedSession);
+    localStorage.setItem('user_session', JSON.stringify(updatedSession));
   };
 
   const handleBookSubmit = async (bookingDate: string, reason: string) => {
@@ -203,14 +217,18 @@ export default function StudentDashboardPage() {
       ? 'My Bookings'
       : activeNav === 'book'
         ? 'Book a Space'
-        : 'Campus Spaces';
+        : activeNav === 'profile'
+          ? 'My Profile'
+          : 'Campus Spaces';
 
   const pageSubtitle =
     activeNav === 'history'
       ? 'Track pending, approved, denied, and canceled booking requests.'
       : activeNav === 'book'
         ? 'Choose an available room and submit your booking request.'
-        : 'Browse and book available campus rooms and laboratories.';
+        : activeNav === 'profile'
+          ? 'Update your account details and contact information.'
+          : 'Browse and book available campus rooms and laboratories.';
 
   return (
     <StudentDashboardShell
@@ -222,7 +240,7 @@ export default function StudentDashboardPage() {
     >
       <div className="mb-6 lg:hidden">
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {(['browse', 'book', 'history'] as StudentNavItem[]).map((item) => (
+          {(['browse', 'book', 'history', 'profile'] as StudentNavItem[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -233,7 +251,13 @@ export default function StudentDashboardPage() {
                   : 'bg-white text-slate-600 ring-1 ring-slate-200'
               }`}
             >
-              {item === 'browse' ? 'Browse' : item === 'book' ? 'Book' : 'History'}
+              {item === 'browse'
+                ? 'Browse'
+                : item === 'book'
+                  ? 'Book'
+                  : item === 'history'
+                    ? 'History'
+                    : 'Profile'}
             </button>
           ))}
         </div>
@@ -257,6 +281,8 @@ export default function StudentDashboardPage() {
           onCancel={handleCancel}
           cancelingId={cancelingId}
         />
+      ) : activeNav === 'profile' ? (
+        <ProfileForm userId={user.id} role="student" onSaved={handleProfileSaved} />
       ) : (
         <RoomCatalog
           spaces={spaces}

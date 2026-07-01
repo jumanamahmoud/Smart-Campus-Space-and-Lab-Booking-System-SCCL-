@@ -19,6 +19,7 @@ const navItems: { id: AdminNavItem; label: string; icon: string }[] = [
   { id: 'spaces', label: 'Manage Spaces', icon: '🏢' },
   { id: 'requests', label: 'Review Requests', icon: '📋' },
   { id: 'availability', label: 'Availability Table', icon: '📅' },
+  { id: 'profile', label: 'My Profile', icon: '👤' },
 ];
 
 export default function AdminDashboardShell({

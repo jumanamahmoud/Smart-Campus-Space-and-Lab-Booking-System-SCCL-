@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ProfileForm from '@/components/profile/ProfileForm';
 import AdminDashboardShell from '@/components/admin/AdminDashboardShell';
 import AvailabilityTable from '@/components/admin/AvailabilityTable';
 import PendingRequestsTable from '@/components/admin/PendingRequestsTable';
@@ -10,6 +11,7 @@ import SpaceManager from '@/components/admin/SpaceManager';
 import AlertModal from '@/components/student/AlertModal';
 import type { AdminBookingRequest, AdminNavItem, AvailabilityTableData, SpaceFormData } from '@/types/admin';
 import type { Space, UserSession } from '@/types/booking';
+import type { UserProfile } from '@/types/profile';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -107,6 +109,18 @@ export default function AdminDashboardPage() {
   const handleLogout = () => {
     localStorage.removeItem('user_session');
     router.push('/login');
+  };
+
+  const handleProfileSaved = (profile: UserProfile) => {
+    if (!user) return;
+
+    const updatedSession: UserSession = {
+      ...user,
+      username: profile.username,
+      email: profile.email,
+    };
+    setUser(updatedSession);
+    localStorage.setItem('user_session', JSON.stringify(updatedSession));
   };
 
   const handleAddSpace = async (data: SpaceFormData) => {
@@ -216,6 +230,11 @@ export default function AdminDashboardPage() {
           title: 'Space Availability',
           subtitle: 'Interactive 14-day availability grid across all campus spaces.',
         };
+      case 'profile':
+        return {
+          title: 'My Profile',
+          subtitle: 'Update your account details and contact information.',
+        };
       default:
         return {
           title: 'Manage Spaces',
@@ -242,7 +261,7 @@ export default function AdminDashboardPage() {
     >
       <div className="mb-6 lg:hidden">
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {(['spaces', 'requests', 'availability'] as AdminNavItem[]).map((item) => (
+          {(['spaces', 'requests', 'availability', 'profile'] as AdminNavItem[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -253,7 +272,13 @@ export default function AdminDashboardPage() {
                   : 'bg-white text-slate-600 ring-1 ring-slate-200'
               }`}
             >
-              {item === 'spaces' ? 'Spaces' : item === 'requests' ? 'Requests' : 'Availability'}
+              {item === 'spaces'
+                ? 'Spaces'
+                : item === 'requests'
+                  ? 'Requests'
+                  : item === 'availability'
+                    ? 'Availability'
+                    : 'Profile'}
             </button>
           ))}
         </div>
@@ -304,6 +329,10 @@ export default function AdminDashboardPage() {
 
       {activeNav === 'availability' && (
         <AvailabilityTable table={availabilityTable} loading={loadingAvailability} />
+      )}
+
+      {activeNav === 'profile' && (
+        <ProfileForm userId={user.id} role="admin" onSaved={handleProfileSaved} />
       )}
 
       {showAddModal && (

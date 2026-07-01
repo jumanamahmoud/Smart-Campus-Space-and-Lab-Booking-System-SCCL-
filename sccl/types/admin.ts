@@ -33,4 +33,4 @@ export interface AvailabilityTableData {
   startDate: string;
 }
 
-export type AdminNavItem = 'spaces' | 'requests' | 'availability';
+export type AdminNavItem = 'spaces' | 'requests' | 'availability' | 'profile';
