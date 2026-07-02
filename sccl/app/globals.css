@@ -28,6 +28,9 @@
   --status-maintenance-bg: #fff7ed;
   --status-maintenance-fg: #ea580c;
   --status-maintenance-muted: #fed7aa;
+  --status-pending-bg: #fffbeb;
+  --status-pending-fg: #d97706;
+  --status-pending-muted: #fde68a;
 
   --radius-sccl: 1rem;
   --radius-sccl-lg: 1.25rem;
@@ -57,6 +60,8 @@
   --color-status-booked-bg: var(--status-booked-bg);
   --color-status-maintenance: var(--status-maintenance-fg);
   --color-status-maintenance-bg: var(--status-maintenance-bg);
+  --color-status-pending: var(--status-pending-fg);
+  --color-status-pending-bg: var(--status-pending-bg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -148,6 +153,10 @@ body {
 
   .sccl-pill-maintenance {
     background: var(--status-maintenance-bg);
+  }
+
+  .sccl-pill-pending {
+    background: var(--status-pending-bg);
   }
 
   .sccl-availability-pill {

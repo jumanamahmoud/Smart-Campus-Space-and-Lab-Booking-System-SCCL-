@@ -53,6 +53,18 @@ function LockIcon({ className }: { className?: string }) {
   );
 }
 
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
+    </svg>
+  );
+}
+
 function HammerIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -93,13 +105,15 @@ function AvailabilityCellPill({
   onBookedClick?: (bookingId: string) => void;
 }) {
   const tooltip = getCellTooltip(cell);
-  const isBooked = (cell.status === 'pending' || cell.status === 'approved') && cell.bookingId;
+  const hasBooking = (cell.status === 'pending' || cell.status === 'approved') && cell.bookingId;
 
   const content =
     cell.status === 'available' ? (
       <CheckIcon className="h-4 w-4 text-[var(--status-available-fg)]" />
     ) : cell.status === 'maintenance' ? (
       <HammerIcon className="h-4 w-4 text-[var(--status-maintenance-fg)]" />
+    ) : cell.status === 'pending' ? (
+      <ClockIcon className="h-4 w-4 text-[var(--status-pending-fg)]" />
     ) : (
       <LockIcon className="h-4 w-4 text-[var(--status-booked-fg)]" />
     );
@@ -109,9 +123,11 @@ function AvailabilityCellPill({
       ? 'sccl-pill-available'
       : cell.status === 'maintenance'
         ? 'sccl-pill-maintenance'
-        : 'sccl-pill-booked';
+        : cell.status === 'pending'
+          ? 'sccl-pill-pending'
+          : 'sccl-pill-booked';
 
-  if (isBooked && onBookedClick) {
+  if (hasBooking && onBookedClick) {
     return (
       <button
         type="button"
@@ -300,7 +316,12 @@ export default function AvailabilityTable({ refreshKey = 0 }: { refreshKey?: num
             <CheckIcon className="h-4 w-4 text-[var(--status-available-fg)]" />
           </span>
         </LegendItem>
-        <LegendItem label="Booked" description="Click to view booking">
+        <LegendItem label="Pending approval" description="Click to view request">
+          <span className="sccl-availability-pill sccl-pill-pending w-14">
+            <ClockIcon className="h-4 w-4 text-[var(--status-pending-fg)]" />
+          </span>
+        </LegendItem>
+        <LegendItem label="Booked" description="Approved — click to view booking">
           <span className="sccl-availability-pill sccl-pill-booked w-14">
             <LockIcon className="h-4 w-4 text-[var(--status-booked-fg)]" />
           </span>
@@ -410,12 +431,12 @@ export default function AvailabilityTable({ refreshKey = 0 }: { refreshKey?: num
               <>
                 Showing bookings for{' '}
                 <span className="font-medium text-slate-700">{formatLongDate(filterDate)}</span>.
-                Click a booked cell to open the booking page.
+                Click a pending or booked cell to open the booking page.
               </>
             ) : (
               <>
                 Full month view: {formatLongDate(table.startDate)} –{' '}
-                {formatLongDate(table.endDate)}. Click booked cells to view booking details.
+                {formatLongDate(table.endDate)}. Click pending or booked cells to view booking details.
               </>
             )}
           </p>

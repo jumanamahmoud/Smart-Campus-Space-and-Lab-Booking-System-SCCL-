@@ -1,6 +1,6 @@
 # SCCL — Smart Campus Space and Lab Booking System
 
-A campus room and lab booking portal for **UTM MJIIT**. Students browse spaces, submit booking requests, and manage their profile. Admins manage spaces, approve requests, and view a 14-day availability grid.
+A campus room and lab booking portal for **UTM MJIIT**. Students browse spaces, submit booking requests, and manage their profile. Admins manage spaces, approve requests, and view a monthly availability calendar.
 
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Supabase
 
@@ -43,7 +43,7 @@ npm run build  # production build
 |------|----------------|
 | **Auth** | Student/admin signup & login (email or username). Session in `localStorage`. |
 | **Student** | Browse & book rooms, check date availability, view/cancel bookings, edit profile |
-| **Admin** | CRUD spaces, approve/deny requests, 14-day availability table, edit profile |
+| **Admin** | CRUD spaces, approve/deny requests, monthly availability calendar, edit profile |
 | **Validation** | Institutional emails, strong passwords, username/phone rules, no double-booking |
 
 ### Pages
@@ -70,7 +70,7 @@ npm run build  # production build
 1. Sign up with `@utm.my` email, staff ID (`UTM…`), and admin passcode.
 2. **Manage Spaces** — add, edit, delete; set `available` or `maintenance`.
 3. **Review Requests** — approve/deny pending bookings (conflicts blocked).
-4. **Availability Table** — 14-day grid: available, pending, approved, maintenance.
+4. **Availability Table** — monthly grid with date filter; click booked cells to view details.
 5. **My Profile** — same fields as students; email must be `@utm.my`.
 
 ### Profile rules (both roles)
@@ -151,6 +151,83 @@ RLS is enabled. Migrations include anon-key policies for development API routes.
 | Profile save denied | Run `004_student_profile_fields.sql` |
 | Email change fails | Add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` |
 | Booking foreign key error | User missing from `profiles` — re-register |
+
+---
+
+## AI Tools in Development
+
+AI was used at multiple stages of SCCL. All outputs were reviewed, tested, and corrected by the team before acceptance.
+
+### Tools by development stage
+
+| Development stage | AI tools used |
+|-------------------|---------------|
+| Idea and scope refinement | ChatGPT, Gemini |
+| UI design | Figma AI |
+| Code development | Cursor AI, GitHub Copilot, Gemini |
+| Backend and API logic | Cursor AI, GitHub Copilot, Gemini |
+| Debugging | Cursor AI, Gemini |
+
+### Tool tutorials
+
+#### ChatGPT — Idea and scope refinement
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Clarify system scope, user roles, and feature list before implementation |
+| **Example prompt** | *Help me define the scope for a campus room booking system with student and admin roles. What core features should each dashboard include?* |
+| **Output summary** | Suggested modules: authentication, student booking flow, admin space management, request approval, and availability tracking. |
+| **Student correction / validation** | The team mapped suggestions to three branches (`auth`, `studentdash`, `admindash`) and removed features outside assignment scope. |
+
+#### Gemini — Idea, backend logic, and debugging
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Discuss architecture options, Supabase table design, and interpret error messages |
+| **Example prompt** | *How should I structure Supabase tables for spaces and booking requests with statuses pending, approved, denied, and canceled?* |
+| **Output summary** | Proposed `spaces`, `booking_requests`, and `profiles` tables with status fields and foreign-key relationships. |
+| **Student correction / validation** | Schema was adapted into `supabase/migrations/001_spaces_and_bookings.sql`. RLS policies were added manually after API tests failed with error `42501`. |
+
+#### Figma AI — UI design
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Draft skeleton UI layouts for student and admin dashboards before coding |
+| **Example prompt** | *Design SCCL: student dashboard to browse rooms, book with date and reason, view history; admin dashboard to manage spaces, review requests, and view availability. Student-friendly layout.* |
+| **Output summary** | Draft screens for room catalog, booking form, request review queue, and availability overview. |
+| **Student correction / validation** | Used as visual reference only. Final UI was built in Next.js with Tailwind (`.sccl-*` classes in `globals.css`), not exported directly from Figma. |
+
+#### Cursor AI — Code development, backend, debugging, docs
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Implement features, API routes, refactoring, and project documentation inside the IDE |
+| **Example prompt** | *Add profile functionality where students can edit username, full name, email, and Malaysia phone number. Admin should edit profiles too.* |
+| **Output summary** | Generated `ProfileForm`, `lib/profile.ts`, `lib/profileValidation.ts`, `/api/profile`, and dashboard integration for both roles. |
+| **Student correction / validation** | Ran `npm run build`, applied migration `004_student_profile_fields.sql`, and refactored duplicate student-only code into shared `getUserProfile` / `updateUserProfile`. |
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Admin availability calendar and booking detail routing |
+| **Example prompt** | *Add monthly calendar view with date filter and route to a booking detail page when admin clicks booked cells.* |
+| **Output summary** | Updated `AvailabilityTable`, `generateAvailabilityTable()`, `/api/admin/availability?year=&month=&date=`, and `/admin/bookings/[id]`. |
+| **Student correction / validation** | Tested month navigation, date filter, and approve/deny from the detail page. Verified back-link to `?tab=requests`. |
+
+#### GitHub Copilot — Code development and backend
+
+| Item | Detail |
+|------|--------|
+| **Purpose** | Inline code suggestions while writing components, API handlers, and TypeScript types |
+| **Example prompt** | *(Contextual — while editing `lib/booking.ts`)* write function to check if a space date is already approved |
+| **Output summary** | Suggested `checkDateAvailability()` and Supabase query patterns for `booking_requests`. |
+| **Student correction / validation** | Team reviewed conflict-check logic before admin approval and ensured student submit flow calls the same availability rules. Copilot suggestions were not accepted blindly. |
+
+### Validation workflow (all AI tools)
+
+1. **Run the code** — `npm run dev` / `npm run build`
+2. **Test with sample data** — login, booking, admin approve/deny, profile save
+3. **Cross-check docs** — Supabase RLS guides, Next.js App Router docs, assignment rules
+4. **Refactor** — merge duplicated AI output into shared modules (`ProfileForm`, `profileValidation.ts`)
 
 ---
 
